@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import QRCode from 'qrcode'
-import type { QrCode, QrCodeCreate } from '../../types/qr'
+import type { QrCode, QrCodeCreate, QrCodeUpdate } from '../../types/qr'
 import * as api from '../../api/codes'
 import { QrCodeImage } from '../../components/QrCodeImage'
 
@@ -61,7 +61,7 @@ export function CodesOverviewPage() {
     fetchCodes()
   }
 
-  const handleUpdate = async (id: string, body: { name?: string; subtitle?: string; target_url?: string; status?: string }) => {
+  const handleUpdate = async (id: string, body: QrCodeUpdate) => {
     await api.updateCode(id, body)
     setEditCode(null)
     fetchCodes()

@@ -44,7 +44,7 @@ export default defineConfig(({ mode }) => {
                   req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
                   return authRouter(req, res, next)
                 }
-                requireAuth(req, res, (err) => {
+                requireAuth(req, res, (err: unknown) => {
                   if (err) return next(err)
                   const rest = req.path.replace(/^\/codes\/?/, '/') || '/'
                   req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
