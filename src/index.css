@@ -1,0 +1,108 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+    'SF Pro Text', ui-sans-serif, sans-serif;
+
+  --color-bg: #f5f5ff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f2f2ff;
+  --color-surface-strong: #1e1f42;
+  --color-accent: #4f46e5;
+  --color-accent-soft: #e0e7ff;
+  --color-accent-strong: #4338ca;
+  --color-border-subtle: #ddd6fe;
+  --color-text-primary: #1e1b4b;
+  --color-text-muted: #5b5b7a;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: linear-gradient(145deg, #eef2ff 0%, #f5f3ff 50%, #faf5ff 100%);
+  color: var(--color-text-primary);
+}
+
+.glass-surface {
+  @apply rounded-3xl shadow-[0_18px_45px_rgba(30,27,75,0.08)] backdrop-blur-xl;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border-subtle);
+}
+
+/* Primary: always colored background + white text */
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-xl px-5 py-2.5 text-sm font-semibold transition focus-visible:outline-none;
+  background-color: var(--color-accent);
+  color: #fff !important;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-accent-strong);
+  color: #fff !important;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.5);
+}
+.btn-primary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.45);
+}
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Ghost: light background + dark text */
+.btn-ghost {
+  @apply inline-flex items-center justify-center rounded-xl border px-4 py-2.5 text-sm font-medium shadow-sm transition focus-visible:outline-none;
+  background-color: #fff;
+  border-color: var(--color-border-subtle);
+  color: var(--color-text-primary) !important;
+}
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--color-accent-soft);
+  background-color: var(--color-surface-soft);
+  color: var(--color-accent-strong) !important;
+  box-shadow: 0 2px 8px rgba(30, 27, 75, 0.06);
+}
+.btn-ghost:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.3);
+}
+
+.input-field {
+  @apply block w-full rounded-xl px-3.5 py-2.5 text-sm outline-none ring-0 transition;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+  box-shadow: 0 1px 2px rgba(30, 27, 75, 0.04);
+}
+.input-field::placeholder {
+  color: var(--color-text-muted);
+}
+.input-field:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2);
+}
+
+.badge-soft {
+  @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium;
+  background-color: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+}
+
+/* Brand/logo block: dark background, white text */
+.brand-block {
+  background-color: var(--color-surface-strong);
+  color: #fff !important;
+}
