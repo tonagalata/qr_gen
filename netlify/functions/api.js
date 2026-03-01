@@ -3,6 +3,7 @@ import serverless from 'serverless-http'
 import { createDb, initSchema } from '../../server/db.js'
 import { createRouter } from '../../server/api.js'
 import { createAuthRouter, createRequireAuth } from '../../server/auth.js'
+import { createScanHandler } from '../../server/scan.js'
 
 let apiReady = null
 
@@ -14,12 +15,22 @@ async function getApi() {
     authRouter: createAuthRouter(db),
     codesRouter: createRouter(db),
     requireAuth: createRequireAuth(),
+    scanHandler: createScanHandler(db),
   }
   return apiReady
 }
 
 const app = express()
 app.use(express.json())
+
+app.get('/r/:id', async (req, res, next) => {
+  try {
+    const { scanHandler } = await getApi()
+    await scanHandler(req, res)
+  } catch (e) {
+    next(e)
+  }
+})
 
 app.use('/api', async (req, res, next) => {
   try {

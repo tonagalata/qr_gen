@@ -10,6 +10,13 @@
   status = 200
   force = true
 
+# Scan tracking: /r/:id redirects to function (records scan, then redirects to target URL)
+[[redirects]]
+  from = "/r/*"
+  to = "/.netlify/functions/api"
+  status = 200
+  force = true
+
 # SPA: serve index.html for all other routes
 [[redirects]]
   from = "/*"

@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState, useMemo } from 'react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import type { QrCode, QrCodeCreate, QrCodeUpdate } from '../../types/qr'
 import * as api from '../../api/codes'
 import { QrCodeImage } from '../../components/QrCodeImage'
+import { loadCollections, setCodeCollection } from '../../lib/collections'
+import { getScanUrl } from '../../lib/scanUrl'
 
 const STATUS_OPTIONS = ['active', 'paused', 'archived', 'static', 'expired'] as const
 const STATUS_LABELS: Record<string, string> = {
@@ -29,6 +31,8 @@ function formatDate(iso: string | null): string {
 }
 
 export function CodesOverviewPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const [codes, setCodes] = useState<QrCode[]>([])
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -36,6 +40,29 @@ export function CodesOverviewPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editCode, setEditCode] = useState<QrCode | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [collectionsTick, setCollectionsTick] = useState(0)
+
+  const searchQ = searchParams.get('q') ?? ''
+  const collections = useMemo(() => loadCollections(), [collectionsTick])
+
+  const filteredCodes = useMemo(() => {
+    const list = Array.isArray(codes) ? codes : []
+    if (!searchQ.trim()) return list
+    const q = searchQ.trim().toLowerCase()
+    return list.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.subtitle && c.subtitle.toLowerCase().includes(q)) ||
+        (c.target_url && c.target_url.toLowerCase().includes(q))
+    )
+  }, [codes, searchQ])
+
+  useEffect(() => {
+    if (location.state && (location.state as { openCreate?: boolean }).openCreate) {
+      setCreateOpen(true)
+      window.history.replaceState({}, '', location.pathname + location.search)
+    }
+  }, [location.state, location.pathname, location.search])
 
   const fetchCodes = async () => {
     setLoading(true)
@@ -103,7 +130,7 @@ export function CodesOverviewPage() {
               className={`border-b-2 pb-2 ${statusFilter === null ? 'border-[--color-accent] text-[--color-accent]' : 'border-transparent hover:text-[--color-text-primary]'}`}
               onClick={() => setStatusFilter(null)}
             >
-              All Codes ({(Array.isArray(codes) ? codes : []).length})
+              All Codes ({filteredCodes.length})
             </button>
             {STATUS_OPTIONS.map((s) => (
               <button
@@ -124,16 +151,36 @@ export function CodesOverviewPage() {
           </div>
         )}
 
+        {searchQ && (
+          <p className="mt-3 text-xs text-[--color-text-muted]">
+            Showing results for “{searchQ}”. <button type="button" className="font-medium text-[--color-accent] hover:underline" onClick={() => setSearchParams({})}>Clear search</button>
+          </p>
+        )}
+
         {loading ? (
-          <div className="mt-6 text-center text-sm text-[--color-text-muted]">Loading…</div>
+          <div className="mt-6 space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-24 animate-pulse rounded-2xl bg-white/60" />
+            ))}
+          </div>
         ) : (
           <div className="mt-4 space-y-3 text-xs">
-            {(Array.isArray(codes) ? codes : []).length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[--color-border-subtle] bg-[--color-surface-soft] px-5 py-8 text-center text-[--color-text-muted]">
-                No QR codes yet. Create one to get started.
+            {filteredCodes.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[--color-border-subtle] bg-[--color-surface-soft] px-5 py-12 text-center">
+                <p className="text-sm font-medium text-slate-900">
+                  {searchQ ? 'No codes match your search.' : 'No QR codes yet.'}
+                </p>
+                <p className="mt-1 text-[--color-text-muted]">
+                  {searchQ ? 'Try a different query or clear search.' : 'Create one to get started.'}
+                </p>
+                {!searchQ && (
+                  <button type="button" className="btn-primary mt-4" onClick={() => setCreateOpen(true)}>
+                    Create QR Code
+                  </button>
+                )}
               </div>
             ) : (
-              (Array.isArray(codes) ? codes : []).map((code) => (
+              filteredCodes.map((code) => (
                 <div
                   key={code.id}
                   className="flex flex-col gap-3 rounded-2xl border border-[--color-border-subtle] bg-white/80 p-4 shadow-sm md:flex-row md:items-center md:justify-between"
@@ -145,7 +192,7 @@ export function CodesOverviewPage() {
                       aria-label={`View ${code.name}`}
                     >
                       <QrCodeImage
-                        value={code.target_url || code.subtitle || `https://example.com/q/${code.id}`}
+                        value={getScanUrl(code.id)}
                         size={44}
                         alt={`QR for ${code.name}`}
                       />
@@ -160,7 +207,7 @@ export function CodesOverviewPage() {
                       <p className="mt-0.5 text-[11px] text-[--color-text-muted]">
                         {code.subtitle || code.target_url || '—'}
                       </p>
-                      <div className="mt-2 inline-flex items-center gap-2">
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span
                           className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                             code.status === 'active'
@@ -174,6 +221,11 @@ export function CodesOverviewPage() {
                         >
                           {STATUS_LABELS[code.status] ?? code.status}
                         </span>
+                        {collections.codeToCollection[code.id] && (
+                          <span className="rounded-full bg-[--color-accent-soft] px-2 py-0.5 text-[11px] font-medium text-[--color-accent-strong]">
+                            {collections.codeToCollection[code.id]}
+                          </span>
+                        )}
                         <span className="text-[11px] text-[--color-text-muted]">
                           • Created {new Date(code.created_at).toLocaleDateString()}
                         </span>
@@ -202,14 +254,29 @@ export function CodesOverviewPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-2 text-[15px] text-[--color-text-muted]">
+                  <div className="flex flex-wrap items-center justify-end gap-2 text-[15px] text-[--color-text-muted]">
+                    <select
+                      className="rounded-lg border border-[--color-border-subtle] bg-white/80 px-2 py-1 text-[11px] text-slate-700"
+                      value={collections.codeToCollection[code.id] ?? ''}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setCodeCollection(code.id, v || null)
+                        setCollectionsTick((t) => t + 1)
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="Collection"
+                    >
+                      <option value="">No collection</option>
+                      {collections.names.map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
                     <button
                       type="button"
                       aria-label="Download QR"
                       title="Download QR code PNG"
                       onClick={async () => {
-                        const url = code.target_url || code.subtitle || `https://example.com/q/${code.id}`
-                        const dataUrl = await QRCode.toDataURL(url, { width: 256, margin: 2 })
+                        const dataUrl = await QRCode.toDataURL(getScanUrl(code.id), { width: 256, margin: 2 })
                         const a = document.createElement('a')
                         a.href = dataUrl
                         a.download = `${code.name.replace(/\s+/g, '-')}-qr.png`

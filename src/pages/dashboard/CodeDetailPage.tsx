@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import type { QrCode } from '../../types/qr'
 import * as api from '../../api/codes'
 import { QrCodeImage } from '../../components/QrCodeImage'
+import { getScanUrl } from '../../lib/scanUrl'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Active',
@@ -44,22 +45,27 @@ export function CodeDetailPage() {
 
   const handleDownload = async () => {
     if (!code) return
-    const url = code.target_url || code.subtitle || `https://example.com/q/${code.id}`
-    const dataUrl = await QRCode.toDataURL(url, { width: 512, margin: 2 })
+    const dataUrl = await QRCode.toDataURL(getScanUrl(code.id), { width: 512, margin: 2 })
     const a = document.createElement('a')
     a.href = dataUrl
     a.download = `${code.name.replace(/\s+/g, '-')}-qr.png`
     a.click()
   }
 
-  const qrValue = code
-    ? code.target_url || code.subtitle || `https://example.com/q/${code.id}`
-    : ''
+  const qrValue = code ? getScanUrl(code.id) : ''
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-sm text-[--color-text-muted]">
-        Loading…
+      <div className="space-y-6">
+        <div className="h-8 w-48 animate-pulse rounded-lg bg-white/60" />
+        <div className="flex gap-6">
+          <div className="h-80 w-80 animate-pulse rounded-2xl bg-white/60" />
+          <div className="flex-1 space-y-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-12 animate-pulse rounded-xl bg-white/60" />
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
@@ -101,6 +107,11 @@ export function CodeDetailPage() {
               {(code.subtitle || code.target_url) && (
                 <p className="mt-1 text-sm text-[--color-text-muted]">
                   {code.subtitle || code.target_url}
+                </p>
+              )}
+              {code.target_url && (
+                <p className="mt-1 text-xs text-[--color-text-muted]">
+                  Scan redirects to: <a href={code.target_url} target="_blank" rel="noreferrer" className="text-[--color-accent] hover:underline truncate block max-w-full">{code.target_url}</a>
                 </p>
               )}
               <span

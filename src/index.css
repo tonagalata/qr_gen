@@ -106,3 +106,17 @@ body {
   background-color: var(--color-surface-strong);
   color: #fff !important;
 }
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.toast-in {
+  animation: toast-in 0.25s ease-out;
+}

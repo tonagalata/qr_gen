@@ -5,6 +5,7 @@ import express from 'express'
 import { createDb, initSchema } from './server/db.js'
 import { createRouter } from './server/api.js'
 import { createAuthRouter, createRequireAuth } from './server/auth.js'
+import { createScanHandler } from './server/scan.js'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -29,12 +30,30 @@ export default defineConfig(({ mode }) => {
                 authRouter: createAuthRouter(db),
                 codesRouter: createRouter(db),
                 requireAuth: createRequireAuth(),
+                scanHandler: createScanHandler(db),
               }
             } catch (e) {
               console.error('API init failed:', e)
               throw e
             }
           })()
+
+          app.use(async (req, res, next) => {
+            if (req.path.startsWith('/r/') && req.method === 'GET') {
+              const id = req.path.slice(3).split('/')[0].split('?')[0]
+              if (id) {
+                req.params = { id }
+                try {
+                  const { scanHandler } = await apiReady
+                  await scanHandler(req, res)
+                } catch (e) {
+                  next(e)
+                }
+                return
+              }
+            }
+            next()
+          })
 
           app.use('/api', (req, res, next) => {
             apiReady
