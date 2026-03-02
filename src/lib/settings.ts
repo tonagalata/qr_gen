@@ -1,7 +1,8 @@
 const KEY = 'qr-studio-settings'
 
 export interface UserSettings {
-  displayName: string
+  firstName: string
+  lastName: string
   workspaceName: string
   timezone: string
   currency: string
@@ -10,15 +11,16 @@ export interface UserSettings {
 }
 
 const defaults: UserSettings = {
-  displayName: '',
-  workspaceName: 'QR Studio',
-  timezone: 'UTC',
-  currency: 'USD ($)',
+  firstName: '',
+  lastName: '',
+  workspaceName: '',
+  timezone: '',
+  currency: '',
   emailWeekly: true,
   emailThreshold: false,
 }
 
-export function loadSettings(): UserSettings {
+export function loadSettings(): UserSettings & { workspaceName: string } {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return { ...defaults }

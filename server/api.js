@@ -1,20 +1,26 @@
 import express from 'express'
 import { randomUUID } from 'crypto'
+import { countCodesInWorkspace, getPlanLimit } from './db.js'
 
-/** Codes router: mount at /api/codes. Routes are / and /:id */
+/** Codes router: mount at /api/codes. Requires req.workspace (set by workspace middleware). */
 export function createRouter(db) {
   const router = express.Router()
 
-  /** List all QR codes */
+  /** List all QR codes for current workspace */
   router.get('/', async (req, res) => {
     try {
+      const wid = req.workspace?.id
+      if (!wid) return res.status(403).json({ error: 'Workspace required' })
       const status = req.query.status
       const rs = status
         ? await db.execute({
-            sql: 'SELECT * FROM qr_codes WHERE status = ? ORDER BY created_at DESC',
-            args: [status],
+            sql: 'SELECT * FROM qr_codes WHERE workspace_id = ? AND status = ? ORDER BY created_at DESC',
+            args: [wid, status],
           })
-        : await db.execute('SELECT * FROM qr_codes ORDER BY created_at DESC')
+        : await db.execute({
+            sql: 'SELECT * FROM qr_codes WHERE workspace_id = ? ORDER BY created_at DESC',
+            args: [wid],
+          })
       const rows = rs.rows.map(rowToCode)
       res.json(rows)
     } catch (err) {
@@ -23,12 +29,14 @@ export function createRouter(db) {
     }
   })
 
-  /** Get one QR code */
+  /** Get one QR code (must belong to workspace) */
   router.get('/:id', async (req, res) => {
     try {
+      const wid = req.workspace?.id
+      if (!wid) return res.status(403).json({ error: 'Workspace required' })
       const rs = await db.execute({
-        sql: 'SELECT * FROM qr_codes WHERE id = ?',
-        args: [req.params.id],
+        sql: 'SELECT * FROM qr_codes WHERE id = ? AND workspace_id = ?',
+        args: [req.params.id, wid],
       })
       if (rs.rows.length === 0) {
         return res.status(404).json({ error: 'Not found' })
@@ -40,19 +48,30 @@ export function createRouter(db) {
     }
   })
 
-  /** Create QR code */
+  /** Create QR code (enforce plan limit: free = 5) */
   router.post('/', async (req, res) => {
     try {
+      const wid = req.workspace?.id
+      if (!wid) return res.status(403).json({ error: 'Workspace required' })
+      const limit = getPlanLimit(req.workspace.plan)
+      const count = await countCodesInWorkspace(db, wid)
+      if (count >= limit) {
+        return res.status(403).json({
+          error: `Plan limit reached (${limit} codes). Upgrade to create more.`,
+          code: 'PLAN_LIMIT_REACHED',
+        })
+      }
       const id = randomUUID()
       const { name, subtitle, target_url, status } = req.body || {}
       if (!name || typeof name !== 'string' || !name.trim()) {
         return res.status(400).json({ error: 'name is required' })
       }
       await db.execute({
-        sql: `INSERT INTO qr_codes (id, name, subtitle, target_url, status, updated_at)
-              VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+        sql: `INSERT INTO qr_codes (id, workspace_id, name, subtitle, target_url, status, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
         args: [
           id,
+          wid,
           name.trim(),
           subtitle ? String(subtitle).trim() : null,
           target_url ? String(target_url).trim() : null,
@@ -67,16 +86,32 @@ export function createRouter(db) {
     }
   })
 
-  /** Update QR code */
+  /** Update QR code (must belong to workspace). Free plan: no edit. No edit after code has been scanned. */
   router.put('/:id', async (req, res) => {
     try {
+      const wid = req.workspace?.id
+      if (!wid) return res.status(403).json({ error: 'Workspace required' })
+      if (req.workspace.plan === 'free') {
+        return res.status(403).json({
+          error: 'Editing codes is not available on the free plan. Upgrade to edit.',
+          code: 'FREE_PLAN_NO_EDIT',
+        })
+      }
       const { name, subtitle, target_url, status } = req.body || {}
       const rs = await db.execute({
-        sql: 'SELECT id FROM qr_codes WHERE id = ?',
-        args: [req.params.id],
+        sql: 'SELECT id, total_scans FROM qr_codes WHERE id = ? AND workspace_id = ?',
+        args: [req.params.id, wid],
       })
       if (rs.rows.length === 0) {
         return res.status(404).json({ error: 'Not found' })
+      }
+      const row = rs.rows[0]
+      const totalScans = Number(row.total_scans ?? 0)
+      if (totalScans > 0) {
+        return res.status(403).json({
+          error: 'Codes cannot be edited after they have been scanned.',
+          code: 'NO_EDIT_AFTER_SCAN',
+        })
       }
       const updates = []
       const args = []
@@ -114,12 +149,20 @@ export function createRouter(db) {
     }
   })
 
-  /** Delete QR code */
+  /** Delete QR code (must belong to workspace). Free plan: no delete. */
   router.delete('/:id', async (req, res) => {
     try {
+      const wid = req.workspace?.id
+      if (!wid) return res.status(403).json({ error: 'Workspace required' })
+      if (req.workspace.plan === 'free') {
+        return res.status(403).json({
+          error: 'Deleting codes is not available on the free plan. Upgrade to delete.',
+          code: 'FREE_PLAN_NO_DELETE',
+        })
+      }
       const rs = await db.execute({
-        sql: 'DELETE FROM qr_codes WHERE id = ?',
-        args: [req.params.id],
+        sql: 'DELETE FROM qr_codes WHERE id = ? AND workspace_id = ?',
+        args: [req.params.id, wid],
       })
       if (rs.rowsAffected === 0) {
         return res.status(404).json({ error: 'Not found' })

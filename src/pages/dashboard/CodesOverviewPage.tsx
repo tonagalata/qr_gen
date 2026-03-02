@@ -3,7 +3,9 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import type { QrCode, QrCodeCreate, QrCodeUpdate } from '../../types/qr'
 import * as api from '../../api/codes'
+import * as workspaceApi from '../../api/workspace'
 import { QrCodeImage } from '../../components/QrCodeImage'
+import { DeleteConfirmModal } from '../../components/DeleteConfirmModal'
 import { loadCollections, setCodeCollection } from '../../lib/collections'
 import { getScanUrl } from '../../lib/scanUrl'
 
@@ -39,8 +41,13 @@ export function CodesOverviewPage() {
   const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [editCode, setEditCode] = useState<QrCode | null>(null)
-  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [codeToDelete, setCodeToDelete] = useState<QrCode | null>(null)
   const [collectionsTick, setCollectionsTick] = useState(0)
+  const [workspace, setWorkspace] = useState<workspaceApi.WorkspaceInfo | null>(null)
+  const atLimit = workspace?.at_limit ?? false
+  const isFreePlan = workspace?.plan === 'free'
+  const canEditCode = (c: QrCode) => !isFreePlan && (c.total_scans ?? 0) === 0
+  const canDeleteCode = () => !isFreePlan
 
   const searchQ = searchParams.get('q') ?? ''
   const collections = useMemo(() => loadCollections(), [collectionsTick])
@@ -58,11 +65,11 @@ export function CodesOverviewPage() {
   }, [codes, searchQ])
 
   useEffect(() => {
-    if (location.state && (location.state as { openCreate?: boolean }).openCreate) {
+    if (location.state && (location.state as { openCreate?: boolean }).openCreate && !atLimit) {
       setCreateOpen(true)
       window.history.replaceState({}, '', location.pathname + location.search)
     }
-  }, [location.state, location.pathname, location.search])
+  }, [location.state, location.pathname, location.search, atLimit])
 
   const fetchCodes = async () => {
     setLoading(true)
@@ -82,10 +89,15 @@ export function CodesOverviewPage() {
     fetchCodes()
   }, [statusFilter])
 
+  useEffect(() => {
+    workspaceApi.getWorkspace().then(setWorkspace).catch(() => setWorkspace(null))
+  }, [])
+
   const handleCreate = async (body: QrCodeCreate) => {
     await api.createCode(body)
     setCreateOpen(false)
     fetchCodes()
+    if (workspace) setWorkspace((w) => (w ? { ...w, code_count: w.code_count + 1, at_limit: w.code_count + 1 >= w.code_limit } : w))
   }
 
   const handleUpdate = async (id: string, body: QrCodeUpdate) => {
@@ -96,7 +108,7 @@ export function CodesOverviewPage() {
 
   const handleDelete = async (id: string) => {
     await api.deleteCode(id)
-    setDeleteId(null)
+    setCodeToDelete(null)
     fetchCodes()
   }
 
@@ -113,16 +125,30 @@ export function CodesOverviewPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <button
-              type="button"
-              className="btn-primary h-9 rounded-xl px-4"
-              onClick={() => setCreateOpen(true)}
-            >
-              Create QR Code
-            </button>
+            {atLimit ? (
+              <Link
+                to="/dashboard/settings"
+                className="inline-flex h-9 items-center rounded-xl bg-amber-100 px-4 font-medium text-amber-800 hover:bg-amber-200"
+              >
+                Upgrade to add more codes
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary h-9 rounded-xl px-4"
+                onClick={() => setCreateOpen(true)}
+              >
+                Create QR Code
+              </button>
+            )}
           </div>
         </div>
 
+        {isFreePlan && (
+          <p className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-2 text-xs text-amber-800">
+            Free plan: new codes count toward your 5-code limit. Codes cannot be edited or deleted. Upgrade in Settings for more.
+          </p>
+        )}
         <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-b border-[--color-border-subtle] pb-2 text-xs font-medium text-[--color-text-muted]">
           <div className="flex gap-4">
             <button
@@ -171,12 +197,17 @@ export function CodesOverviewPage() {
                   {searchQ ? 'No codes match your search.' : 'No QR codes yet.'}
                 </p>
                 <p className="mt-1 text-[--color-text-muted]">
-                  {searchQ ? 'Try a different query or clear search.' : 'Create one to get started.'}
+                  {searchQ ? 'Try a different query or clear search.' : atLimit ? 'Upgrade your plan to create more codes.' : 'Create one to get started.'}
                 </p>
-                {!searchQ && (
+                {!searchQ && !atLimit && (
                   <button type="button" className="btn-primary mt-4" onClick={() => setCreateOpen(true)}>
                     Create QR Code
                   </button>
+                )}
+                {!searchQ && atLimit && (
+                  <Link to="/dashboard/settings" className="btn-primary mt-4 inline-block">
+                    Upgrade to add more codes
+                  </Link>
                 )}
               </div>
             ) : (
@@ -285,10 +316,30 @@ export function CodesOverviewPage() {
                     >
                       ⬇️
                     </button>
-                    <button type="button" aria-label="Edit" onClick={() => setEditCode(code)}>
+                    <button
+                      type="button"
+                      aria-label="Edit"
+                      title={
+                        isFreePlan
+                          ? 'Editing is not available on the free plan'
+                          : (code.total_scans ?? 0) > 0
+                            ? 'Codes cannot be edited after they have been scanned'
+                            : 'Edit'
+                      }
+                      disabled={!canEditCode(code)}
+                      className="disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => canEditCode(code) && setEditCode(code)}
+                    >
                       ✎
                     </button>
-                    <button type="button" aria-label="Delete" onClick={() => setDeleteId(code.id)}>
+                    <button
+                      type="button"
+                      aria-label="Delete"
+                      title={isFreePlan ? 'Deleting is not available on the free plan' : 'Delete'}
+                      disabled={!canDeleteCode()}
+                      className="disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => canDeleteCode() && setCodeToDelete(code)}
+                    >
                       🗑
                     </button>
                   </div>
@@ -304,14 +355,12 @@ export function CodesOverviewPage() {
             Use dynamic QR codes to track scans, change URLs without reprinting, and segment
             performance by campaign.
           </p>
-          <a
-            href="https://docs.turso.tech"
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            to="/learn"
             className="btn-ghost mt-3 inline-flex h-8 rounded-lg px-3 text-[11px]"
           >
             Learn more about dynamic codes
-          </a>
+          </Link>
         </div>
       </section>
 
@@ -338,11 +387,13 @@ export function CodesOverviewPage() {
         />
       )}
 
-      {deleteId && (
-        <ConfirmModal
-          message="Delete this QR code? This cannot be undone."
-          onClose={() => setDeleteId(null)}
-          onConfirm={() => handleDelete(deleteId)}
+      {codeToDelete && (
+        <DeleteConfirmModal
+          resourceType="QR code"
+          resourceName={codeToDelete.name}
+          confirmText="delete"
+          onClose={() => setCodeToDelete(null)}
+          onConfirm={() => handleDelete(codeToDelete.id)}
         />
       )}
     </div>
@@ -454,45 +505,3 @@ function CodeFormModal({
   )
 }
 
-function ConfirmModal({
-  message,
-  onClose,
-  onConfirm,
-}: {
-  message: string
-  onClose: () => void
-  onConfirm: () => void | Promise<void>
-}) {
-  const [loading, setLoading] = useState(false)
-  const handleConfirm = async () => {
-    setLoading(true)
-    try {
-      await onConfirm()
-    } finally {
-      setLoading(false)
-    }
-  }
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="glass-surface w-full max-w-sm p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <p className="text-sm text-slate-900">{message}</p>
-        <div className="mt-4 flex justify-end gap-2">
-          <button type="button" className="btn-ghost" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-600"
-            onClick={handleConfirm}
-            disabled={loading}
-          >
-            {loading ? 'Deleting…' : 'Delete'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}

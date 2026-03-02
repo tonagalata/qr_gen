@@ -3,6 +3,9 @@ const BASE = '/api/auth'
 export interface AuthUser {
   id: string
   username: string
+  first_name?: string | null
+  last_name?: string | null
+  email?: string | null
 }
 
 export interface AuthResponse {
@@ -10,11 +13,24 @@ export interface AuthResponse {
   token: string
 }
 
-export async function register(username: string, password: string): Promise<AuthResponse> {
+export async function register(params: {
+  first_name: string
+  last_name: string
+  username: string
+  password: string
+  email?: string
+}): Promise<AuthResponse> {
+  const { first_name, last_name, username, password, email } = params
   const res = await fetch(`${BASE}/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: username.trim(), password }),
+    body: JSON.stringify({
+      first_name: first_name.trim(),
+      last_name: last_name.trim(),
+      username: username.trim(),
+      password,
+      ...(email?.trim() && { email: email.trim() }),
+    }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.error || res.statusText)

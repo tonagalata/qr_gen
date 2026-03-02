@@ -16,7 +16,13 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login: (username: string, password: string) => Promise<void>
-  register: (username: string, password: string) => Promise<void>
+  register: (params: {
+    first_name: string
+    last_name: string
+    username: string
+    password: string
+    email?: string
+  }) => Promise<void>
   logout: () => void
   isAuthenticated: boolean
 }
@@ -47,7 +53,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setState((s) => ({
         ...s,
         loading: false,
-        user: { id: payload.sub, username: payload.username ?? '' },
+        user: {
+          id: payload.sub,
+          username: payload.username ?? '',
+          first_name: payload.first_name ?? null,
+          last_name: payload.last_name ?? null,
+          email: payload.email ?? null,
+        },
       }))
     } catch {
       clearStoredToken()
@@ -61,11 +73,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ user, token, loading: false })
   }, [])
 
-  const register = useCallback(async (username: string, password: string) => {
-    const { user, token } = await apiRegister(username, password)
-    setStoredToken(token)
-    setState({ user, token, loading: false })
-  }, [])
+  const register = useCallback(
+    async (params: {
+      first_name: string
+      last_name: string
+      username: string
+      password: string
+      email?: string
+    }) => {
+      const { user, token } = await apiRegister(params)
+      setStoredToken(token)
+      setState({ user, token, loading: false })
+    },
+    []
+  )
 
   const logout = useCallback(() => {
     clearStoredToken()

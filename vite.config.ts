@@ -6,6 +6,8 @@ import { createDb, initSchema } from './server/db.js'
 import { createRouter } from './server/api.js'
 import { createAuthRouter, createRequireAuth } from './server/auth.js'
 import { createScanHandler } from './server/scan.js'
+import { createWorkspaceMiddleware, createWorkspaceRouter } from './server/workspace.js'
+import { createBillingRouter, handleStripeWebhook } from './server/billing.js'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -20,6 +22,18 @@ export default defineConfig(({ mode }) => {
         name: 'api',
         configureServer(server) {
           const app = express()
+          app.post(
+            '/api/billing/webhook',
+            express.raw({ type: 'application/json' }),
+            async (req, res, next) => {
+              try {
+                const api = await apiReady
+                await handleStripeWebhook(req, res, api.db)
+              } catch (e) {
+                next(e)
+              }
+            }
+          )
           app.use(express.json())
 
           const apiReady = (async () => {
@@ -27,9 +41,13 @@ export default defineConfig(({ mode }) => {
               const db = createDb()
               await initSchema(db)
               return {
+                db,
                 authRouter: createAuthRouter(db),
                 codesRouter: createRouter(db),
                 requireAuth: createRequireAuth(),
+                workspaceMiddleware: createWorkspaceMiddleware(db),
+                workspaceRouter: createWorkspaceRouter(db),
+                billingRouter: createBillingRouter(db),
                 scanHandler: createScanHandler(db),
               }
             } catch (e) {
@@ -57,19 +75,65 @@ export default defineConfig(({ mode }) => {
 
           app.use('/api', (req, res, next) => {
             apiReady
-              .then(({ authRouter, codesRouter, requireAuth }) => {
-                if (req.path === '/auth' || req.path.startsWith('/auth/')) {
-                  const rest = req.path.replace(/^\/auth\/?/, '/') || '/'
-                  req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
-                  return authRouter(req, res, next)
+              .then(
+                ({
+                  authRouter,
+                  codesRouter,
+                  requireAuth,
+                  workspaceMiddleware,
+                  workspaceRouter,
+                  billingRouter,
+                }) => {
+                  const path = req.path
+                  if (path === '/auth' || path.startsWith('/auth/')) {
+                    const rest = path.replace(/^\/auth\/?/, '/') || '/'
+                    req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
+                    return authRouter(req, res, next)
+                  }
+                  const runWithWorkspace = (handler) => {
+                    requireAuth(req, res, (err) => {
+                      if (err) return next(err)
+                      workspaceMiddleware(req, res, (err2) => {
+                        if (err2) return next(err2)
+                        handler()
+                      })
+                    })
+                  }
+                  if (path === '/workspace' || path.startsWith('/workspace/')) {
+                    requireAuth(req, res, (err) => {
+                      if (err) return next(err)
+                      const rest = path.replace(/^\/workspace\/?/, '/') || '/'
+                      req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
+                      workspaceRouter(req, res, next)
+                    })
+                    return
+                  }
+                  if (path === '/billing/checkout' || path === '/billing/portal' || path === '/billing/setup' || path === '/billing/confirm-onboarding') {
+                    runWithWorkspace(() => {
+                      const rest =
+                        path === '/billing/checkout'
+                          ? '/checkout'
+                          : path === '/billing/portal'
+                            ? '/portal'
+                            : path === '/billing/confirm-onboarding'
+                              ? '/confirm-onboarding'
+                              : '/setup'
+                      req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
+                      billingRouter(req, res, next)
+                    })
+                    return
+                  }
+                  if (path === '/codes' || path.startsWith('/codes/')) {
+                    runWithWorkspace(() => {
+                      const rest = path.replace(/^\/codes\/?/, '/') || '/'
+                      req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
+                      codesRouter(req, res, next)
+                    })
+                    return
+                  }
+                  next()
                 }
-                requireAuth(req, res, (err: unknown) => {
-                  if (err) return next(err)
-                  const rest = req.path.replace(/^\/codes\/?/, '/') || '/'
-                  req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
-                  codesRouter(req, res, next)
-                })
-              })
+              )
               .catch(() => {
                 res.status(503).json({
                   error:

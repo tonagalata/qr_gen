@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { LayoutGrid, LogIn, User, Lock } from 'lucide-react'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -33,11 +34,11 @@ export function LoginPage() {
       <div className="w-full max-w-md">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <div className="brand-block flex h-10 w-10 items-center justify-center rounded-2xl shadow-lg">
-            <span className="text-lg font-semibold">QR</span>
+            <LayoutGrid className="h-6 w-6" strokeWidth={2.5} />
           </div>
           <div>
             <p className="text-sm font-semibold tracking-tight text-slate-900">
-              QuickLink
+              QR Studio
             </p>
             <p className="mt-1 text-xs text-[--color-text-muted]">
               Welcome back. Log in to manage your QR campaigns.
@@ -46,11 +47,14 @@ export function LoginPage() {
         </div>
 
         <div className="glass-surface px-6 py-7">
-          <h1 className="text-center text-xl font-semibold tracking-tight text-slate-900">
-            Welcome Back
-          </h1>
+          <div className="flex items-center justify-center gap-2">
+            <LogIn className="h-5 w-5 text-[--color-accent]" strokeWidth={2} />
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+              Welcome back
+            </h1>
+          </div>
           <p className="mt-1 text-center text-xs text-[--color-text-muted]">
-            Please enter your details to sign in.
+            Sign in to manage your QR campaigns.
           </p>
 
           {error && (
