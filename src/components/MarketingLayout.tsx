@@ -1,5 +1,5 @@
 import { Link, Outlet } from 'react-router-dom'
-import { LayoutGrid, CreditCard, Info, HelpCircle, BookOpen, LogIn, UserPlus, ChevronRight } from 'lucide-react'
+import { LayoutGrid, CreditCard, Info, HelpCircle, BookOpen, LogIn, ChevronRight } from 'lucide-react'
 
 const navLinks = [
   { label: 'Features', to: '/features', icon: LayoutGrid },

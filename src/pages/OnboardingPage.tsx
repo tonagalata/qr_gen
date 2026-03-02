@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
 import { useToast } from '../contexts/ToastContext'
 import * as workspaceApi from '../api/workspace'
 import {
@@ -16,12 +15,15 @@ const STEPS = ['workspace', 'team', 'plan', 'card'] as const
 type Step = (typeof STEPS)[number]
 
 export function OnboardingPage() {
-  const { user } = useAuth()
   const { toast } = useToast()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const stepParam = searchParams.get('step') as Step | null
-  const [step, setStep] = useState<Step>(stepParam && STEPS.includes(stepParam) ? stepParam : 'workspace')
+  const stepParam = searchParams.get('step')
+  const [step, setStep] = useState<Step>(
+    stepParam && (STEPS as readonly string[]).includes(stepParam)
+      ? (stepParam as Step)
+      : 'workspace',
+  )
   const [workspace, setWorkspace] = useState<workspaceApi.WorkspaceInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -108,7 +110,7 @@ export function OnboardingPage() {
         </div>
 
         <div className="mb-8 flex gap-2">
-          {STEPS.map((s, i) => {
+          {STEPS.map((s) => {
             const idx = STEPS.indexOf(step)
             const done = workspace && (s === 'workspace' || (s === 'team' && idx > 0) || (s === 'plan' && idx > 1) || (s === 'card' && idx > 2))
             const active = step === s

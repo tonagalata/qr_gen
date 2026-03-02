@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
-import { LayoutGrid, LogIn, User, Lock } from 'lucide-react'
+import { LayoutGrid, LogIn } from 'lucide-react'
 
 export function LoginPage() {
   const navigate = useNavigate()

@@ -90,17 +90,17 @@ export default defineConfig(({ mode }) => {
                     req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
                     return authRouter(req, res, next)
                   }
-                  const runWithWorkspace = (handler) => {
-                    requireAuth(req, res, (err) => {
+                  const runWithWorkspace = (handler: () => void) => {
+                    requireAuth(req, res, (err: unknown) => {
                       if (err) return next(err)
-                      workspaceMiddleware(req, res, (err2) => {
+                      workspaceMiddleware(req, res, (err2: unknown) => {
                         if (err2) return next(err2)
                         handler()
                       })
                     })
                   }
                   if (path === '/workspace' || path.startsWith('/workspace/')) {
-                    requireAuth(req, res, (err) => {
+                    requireAuth(req, res, (err: unknown) => {
                       if (err) return next(err)
                       const rest = path.replace(/^\/workspace\/?/, '/') || '/'
                       req.url = rest + (req.originalUrl.includes('?') ? '?' + req.originalUrl.split('?')[1] : '')
