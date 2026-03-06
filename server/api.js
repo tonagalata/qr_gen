@@ -1,6 +1,6 @@
 import express from 'express'
 import { randomUUID } from 'crypto'
-import { countCodesInWorkspace, getPlanLimit } from './db.js'
+import { countCodesInWorkspace, getPlanLimit, generateUniqueSlug } from './db.js'
 
 /** Codes router: mount at /api/codes. Requires req.workspace (set by workspace middleware). */
 export function createRouter(db) {
@@ -66,9 +66,10 @@ export function createRouter(db) {
       if (!name || typeof name !== 'string' || !name.trim()) {
         return res.status(400).json({ error: 'name is required' })
       }
+      const short_slug = await generateUniqueSlug(db)
       await db.execute({
-        sql: `INSERT INTO qr_codes (id, workspace_id, name, subtitle, target_url, status, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+        sql: `INSERT INTO qr_codes (id, workspace_id, name, subtitle, target_url, status, short_slug, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
         args: [
           id,
           wid,
@@ -76,6 +77,7 @@ export function createRouter(db) {
           subtitle ? String(subtitle).trim() : null,
           target_url ? String(target_url).trim() : null,
           status && ['active', 'paused', 'archived', 'static', 'expired'].includes(status) ? status : 'active',
+          short_slug,
         ],
       })
       const rs = await db.execute({ sql: 'SELECT * FROM qr_codes WHERE id = ?', args: [id] })
@@ -184,6 +186,7 @@ function rowToCode(row) {
     subtitle: row.subtitle ?? '',
     target_url: row.target_url ?? '',
     status: row.status ?? 'active',
+    short_slug: row.short_slug ?? null,
     total_scans: Number(row.total_scans) ?? 0,
     unique_scans: Number(row.unique_scans) ?? 0,
     last_scan_at: row.last_scan_at ?? null,

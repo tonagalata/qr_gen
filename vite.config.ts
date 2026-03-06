@@ -6,6 +6,7 @@ import { createDb, initSchema } from './server/db.js'
 import { createRouter } from './server/api.js'
 import { createAuthRouter, createRequireAuth } from './server/auth.js'
 import { createScanHandler } from './server/scan.js'
+import { createLinksHandler } from './server/links.js'
 import { createWorkspaceMiddleware, createWorkspaceRouter } from './server/workspace.js'
 import { createBillingRouter, handleStripeWebhook } from './server/billing.js'
 
@@ -49,6 +50,7 @@ export default defineConfig(({ mode }) => {
                 workspaceRouter: createWorkspaceRouter(db),
                 billingRouter: createBillingRouter(db),
                 scanHandler: createScanHandler(db),
+                linksHandler: createLinksHandler(db),
               }
             } catch (e) {
               console.error('API init failed:', e)
@@ -64,6 +66,19 @@ export default defineConfig(({ mode }) => {
                 try {
                   const { scanHandler } = await apiReady
                   await scanHandler(req, res)
+                } catch (e) {
+                  next(e)
+                }
+                return
+              }
+            }
+            if (req.path.startsWith('/s/') && req.method === 'GET') {
+              const slug = req.path.slice(3).split('/')[0].split('?')[0]
+              if (slug) {
+                req.params = { slug }
+                try {
+                  const { linksHandler } = await apiReady
+                  await linksHandler(req, res)
                 } catch (e) {
                   next(e)
                 }

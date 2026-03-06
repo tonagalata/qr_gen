@@ -17,6 +17,13 @@
   status = 200
   force = true
 
+# Short links: /s/:slug redirects via serverless function
+[[redirects]]
+  from = "/s/*"
+  to = "/.netlify/functions/api"
+  status = 200
+  force = true
+
 # SPA: serve index.html for all other routes
 [[redirects]]
   from = "/*"

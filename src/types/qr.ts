@@ -4,6 +4,7 @@ export interface QrCode {
   subtitle: string
   target_url: string
   status: 'active' | 'paused' | 'archived' | 'static' | 'expired'
+  short_slug: string | null
   total_scans: number
   unique_scans: number
   last_scan_at: string | null

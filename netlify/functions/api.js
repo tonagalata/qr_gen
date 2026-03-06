@@ -4,6 +4,7 @@ import { createDb, initSchema } from '../../server/db.js'
 import { createRouter } from '../../server/api.js'
 import { createAuthRouter, createRequireAuth } from '../../server/auth.js'
 import { createScanHandler } from '../../server/scan.js'
+import { createLinksHandler } from '../../server/links.js'
 import { createWorkspaceMiddleware, createWorkspaceRouter } from '../../server/workspace.js'
 import { createBillingRouter, handleStripeWebhook } from '../../server/billing.js'
 
@@ -22,6 +23,7 @@ async function getApi() {
     workspaceRouter: createWorkspaceRouter(db),
     billingRouter: createBillingRouter(db),
     scanHandler: createScanHandler(db),
+    linksHandler: createLinksHandler(db),
   }
   return apiReady
 }
@@ -45,6 +47,15 @@ app.get('/r/:id', async (req, res, next) => {
   try {
     const { scanHandler } = await getApi()
     await scanHandler(req, res)
+  } catch (e) {
+    next(e)
+  }
+})
+
+app.get('/s/:slug', async (req, res, next) => {
+  try {
+    const { linksHandler } = await getApi()
+    await linksHandler(req, res)
   } catch (e) {
     next(e)
   }

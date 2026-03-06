@@ -1,4 +1,5 @@
 import { createClient } from '@libsql/client'
+import { randomBytes } from 'crypto'
 
 const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS users (
@@ -50,6 +51,7 @@ const ALTER_STATEMENTS = [
   'ALTER TABLE users ADD COLUMN email TEXT',
   'ALTER TABLE qr_codes ADD COLUMN workspace_id TEXT',
   'ALTER TABLE workspaces ADD COLUMN onboarding_completed_at TEXT',
+  'ALTER TABLE qr_codes ADD COLUMN short_slug TEXT',
 ]
 
 // Plan limits (align with marketing copy):
@@ -140,6 +142,16 @@ export async function updateWorkspaceSubscription(db, workspaceId, plan, stripeS
     sql: "UPDATE workspaces SET plan = ?, stripe_subscription_id = ?, updated_at = datetime('now') WHERE id = ?",
     args: [plan ?? 'free', stripeSubscriptionId ?? null, workspaceId],
   })
+}
+
+/** Generate a unique short slug for a QR code (7-char base64url). */
+export async function generateUniqueSlug(db) {
+  for (let i = 0; i < 10; i++) {
+    const slug = randomBytes(5).toString('base64url').slice(0, 7)
+    const rs = await db.execute({ sql: 'SELECT id FROM qr_codes WHERE short_slug = ?', args: [slug] })
+    if (rs.rows.length === 0) return slug
+  }
+  throw new Error('Could not generate unique slug after 10 attempts')
 }
 
 /** Mark workspace onboarding as completed (e.g. after card on file). */
