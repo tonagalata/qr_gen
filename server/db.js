@@ -52,6 +52,7 @@ const ALTER_STATEMENTS = [
   'ALTER TABLE qr_codes ADD COLUMN workspace_id TEXT',
   'ALTER TABLE workspaces ADD COLUMN onboarding_completed_at TEXT',
   'ALTER TABLE qr_codes ADD COLUMN short_slug TEXT',
+  'ALTER TABLE qr_codes ADD COLUMN logo_data_url TEXT',
 ]
 
 // Plan limits (align with marketing copy):

@@ -2,6 +2,19 @@ import express from 'express'
 import { randomUUID } from 'crypto'
 import { countCodesInWorkspace, getPlanLimit, generateUniqueSlug } from './db.js'
 
+// Cap the stored logo data URL to keep rows small (~225KB decoded).
+const MAX_LOGO_DATA_URL_LENGTH = 400_000
+const LOGO_DATA_URL_RE = /^data:image\/(png|jpeg|jpg|webp|svg\+xml);base64,/
+
+function normalizeLogoDataUrl(value) {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (typeof value !== 'string' || !LOGO_DATA_URL_RE.test(value) || value.length > MAX_LOGO_DATA_URL_LENGTH) {
+    return { error: 'logo_data_url must be a PNG/JPEG/WebP/SVG data URL under 300KB' }
+  }
+  return value
+}
+
 /** Codes router: mount at /api/codes. Requires req.workspace (set by workspace middleware). */
 export function createRouter(db) {
   const router = express.Router()
@@ -62,14 +75,18 @@ export function createRouter(db) {
         })
       }
       const id = randomUUID()
-      const { name, subtitle, target_url, status } = req.body || {}
+      const { name, subtitle, target_url, status, logo_data_url } = req.body || {}
       if (!name || typeof name !== 'string' || !name.trim()) {
         return res.status(400).json({ error: 'name is required' })
       }
+      const logo = normalizeLogoDataUrl(logo_data_url)
+      if (logo && logo.error) {
+        return res.status(400).json({ error: logo.error })
+      }
       const short_slug = await generateUniqueSlug(db)
       await db.execute({
-        sql: `INSERT INTO qr_codes (id, workspace_id, name, subtitle, target_url, status, short_slug, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+        sql: `INSERT INTO qr_codes (id, workspace_id, name, subtitle, target_url, status, short_slug, logo_data_url, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
         args: [
           id,
           wid,
@@ -78,6 +95,7 @@ export function createRouter(db) {
           target_url ? String(target_url).trim() : null,
           status && ['active', 'paused', 'archived', 'static', 'expired'].includes(status) ? status : 'active',
           short_slug,
+          logo ?? null,
         ],
       })
       const rs = await db.execute({ sql: 'SELECT * FROM qr_codes WHERE id = ?', args: [id] })
@@ -99,21 +117,17 @@ export function createRouter(db) {
           code: 'FREE_PLAN_NO_EDIT',
         })
       }
-      const { name, subtitle, target_url, status } = req.body || {}
+      const { name, subtitle, target_url, status, logo_data_url } = req.body || {}
+      const logo = normalizeLogoDataUrl(logo_data_url)
+      if (logo && logo.error) {
+        return res.status(400).json({ error: logo.error })
+      }
       const rs = await db.execute({
-        sql: 'SELECT id, total_scans FROM qr_codes WHERE id = ? AND workspace_id = ?',
+        sql: 'SELECT id FROM qr_codes WHERE id = ? AND workspace_id = ?',
         args: [req.params.id, wid],
       })
       if (rs.rows.length === 0) {
         return res.status(404).json({ error: 'Not found' })
-      }
-      const row = rs.rows[0]
-      const totalScans = Number(row.total_scans ?? 0)
-      if (totalScans > 0) {
-        return res.status(403).json({
-          error: 'Codes cannot be edited after they have been scanned.',
-          code: 'NO_EDIT_AFTER_SCAN',
-        })
       }
       const updates = []
       const args = []
@@ -132,6 +146,10 @@ export function createRouter(db) {
       if (status !== undefined && ['active', 'paused', 'archived', 'static', 'expired'].includes(status)) {
         updates.push('status = ?')
         args.push(status)
+      }
+      if (logo_data_url !== undefined) {
+        updates.push('logo_data_url = ?')
+        args.push(logo ?? null)
       }
       if (updates.length === 0) {
         const r = await db.execute({ sql: 'SELECT * FROM qr_codes WHERE id = ?', args: [req.params.id] })
@@ -187,6 +205,7 @@ function rowToCode(row) {
     target_url: row.target_url ?? '',
     status: row.status ?? 'active',
     short_slug: row.short_slug ?? null,
+    logo_data_url: row.logo_data_url ?? null,
     total_scans: Number(row.total_scans) ?? 0,
     unique_scans: Number(row.unique_scans) ?? 0,
     last_scan_at: row.last_scan_at ?? null,

@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import QRCode from 'qrcode'
 import type { QrCode, QrCodeCreate, QrCodeUpdate } from '../../types/qr'
 import * as api from '../../api/codes'
 import * as workspaceApi from '../../api/workspace'
@@ -8,6 +7,7 @@ import { QrCodeImage } from '../../components/QrCodeImage'
 import { DeleteConfirmModal } from '../../components/DeleteConfirmModal'
 import { loadCollections, setCodeCollection } from '../../lib/collections'
 import { getScanUrl } from '../../lib/scanUrl'
+import { renderQrDataUrl, fileToLogoDataUrl } from '../../lib/qrLogo'
 
 const STATUS_OPTIONS = ['active', 'paused', 'archived', 'static', 'expired'] as const
 const STATUS_LABELS: Record<string, string> = {
@@ -46,7 +46,7 @@ export function CodesOverviewPage() {
   const [workspace, setWorkspace] = useState<workspaceApi.WorkspaceInfo | null>(null)
   const atLimit = workspace?.at_limit ?? false
   const isFreePlan = workspace?.plan === 'free'
-  const canEditCode = (c: QrCode) => !isFreePlan && (c.total_scans ?? 0) === 0
+  const canEditCode = () => !isFreePlan
   const canDeleteCode = () => !isFreePlan
 
   const searchQ = searchParams.get('q') ?? ''
@@ -226,6 +226,7 @@ export function CodesOverviewPage() {
                         value={getScanUrl(code.id)}
                         size={44}
                         alt={`QR for ${code.name}`}
+                        logoUrl={code.logo_data_url}
                       />
                     </Link>
                     <div>
@@ -307,7 +308,7 @@ export function CodesOverviewPage() {
                       aria-label="Download QR"
                       title="Download QR code PNG"
                       onClick={async () => {
-                        const dataUrl = await QRCode.toDataURL(getScanUrl(code.id), { width: 256, margin: 2 })
+                        const dataUrl = await renderQrDataUrl(getScanUrl(code.id), 256, code.logo_data_url)
                         const a = document.createElement('a')
                         a.href = dataUrl
                         a.download = `${code.name.replace(/\s+/g, '-')}-qr.png`
@@ -319,16 +320,10 @@ export function CodesOverviewPage() {
                     <button
                       type="button"
                       aria-label="Edit"
-                      title={
-                        isFreePlan
-                          ? 'Editing is not available on the free plan'
-                          : (code.total_scans ?? 0) > 0
-                            ? 'Codes cannot be edited after they have been scanned'
-                            : 'Edit'
-                      }
-                      disabled={!canEditCode(code)}
+                      title={isFreePlan ? 'Editing is not available on the free plan' : 'Edit'}
+                      disabled={!canEditCode()}
                       className="disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={() => canEditCode(code) && setEditCode(code)}
+                      onClick={() => canEditCode() && setEditCode(code)}
                     >
                       ✎
                     </button>
@@ -367,7 +362,7 @@ export function CodesOverviewPage() {
       {createOpen && (
         <CodeFormModal
           title="Create QR Code"
-          initial={{ name: '', subtitle: '', target_url: '', status: 'active' }}
+          initial={{ name: '', subtitle: '', target_url: '', status: 'active', logo_data_url: null }}
           onClose={() => setCreateOpen(false)}
           onSubmit={handleCreate}
         />
@@ -381,6 +376,7 @@ export function CodesOverviewPage() {
             subtitle: editCode.subtitle,
             target_url: editCode.target_url,
             status: editCode.status,
+            logo_data_url: editCode.logo_data_url,
           }}
           onClose={() => setEditCode(null)}
           onSubmit={(body) => handleUpdate(editCode.id, body)}
@@ -407,7 +403,7 @@ function CodeFormModal({
   onSubmit,
 }: {
   title: string
-  initial: { name: string; subtitle: string; target_url: string; status: string }
+  initial: { name: string; subtitle: string; target_url: string; status: string; logo_data_url: string | null }
   onClose: () => void
   onSubmit: (body: QrCodeCreate) => void | Promise<void>
 }) {
@@ -415,14 +411,38 @@ function CodeFormModal({
   const [subtitle, setSubtitle] = useState(initial.subtitle)
   const [targetUrl, setTargetUrl] = useState(initial.target_url)
   const [status, setStatus] = useState(initial.status)
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(initial.logo_data_url)
+  const [logoError, setLogoError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setLogoError('Please choose an image file (PNG, JPG, WebP, or SVG).')
+      return
+    }
+    try {
+      setLogoError(null)
+      setLogoDataUrl(await fileToLogoDataUrl(file))
+    } catch {
+      setLogoError('Failed to load that image.')
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
     setSaving(true)
     try {
-      await onSubmit({ name: name.trim(), subtitle: subtitle.trim() || undefined, target_url: targetUrl.trim() || undefined, status: status as QrCode['status'] })
+      await onSubmit({
+        name: name.trim(),
+        subtitle: subtitle.trim() || undefined,
+        target_url: targetUrl.trim() || undefined,
+        status: status as QrCode['status'],
+        logo_data_url: logoDataUrl,
+      })
     } finally {
       setSaving(false)
     }
@@ -467,12 +487,38 @@ function CodeFormModal({
               placeholder="https://..."
             />
           </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[--color-text-muted]">Center logo (optional)</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                onChange={handleLogoChange}
+                className="input-field text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-[--color-accent-soft] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[--color-accent-strong]"
+              />
+              {logoDataUrl && (
+                <button
+                  type="button"
+                  className="btn-ghost shrink-0 text-xs"
+                  onClick={() => setLogoDataUrl(null)}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            {logoError && <p className="mt-1 text-xs text-rose-600">{logoError}</p>}
+            <p className="mt-1 text-[11px] text-[--color-text-muted]">
+              Placed in the center of the QR code. Keep it simple so the code stays scannable.
+            </p>
+          </div>
+
           {(targetUrl.trim() || subtitle.trim()) && (
             <div className="flex items-center gap-3 rounded-xl border border-[--color-border-subtle] bg-slate-50/50 p-3">
               <QrCodeImage
                 value={targetUrl.trim() || subtitle.trim()}
                 size={80}
                 alt="Preview"
+                logoUrl={logoDataUrl}
               />
               <p className="text-xs text-[--color-text-muted]">
                 Preview: scan or download after saving.

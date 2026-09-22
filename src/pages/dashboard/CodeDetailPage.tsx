@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import QRCode from 'qrcode'
 import type { QrCode } from '../../types/qr'
 import * as api from '../../api/codes'
 import { QrCodeImage } from '../../components/QrCodeImage'
 import { getScanUrl, getShortUrl } from '../../lib/scanUrl'
+import { renderQrDataUrl } from '../../lib/qrLogo'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Active',
@@ -47,7 +47,7 @@ export function CodeDetailPage() {
 
   const handleDownload = async () => {
     if (!code) return
-    const dataUrl = await QRCode.toDataURL(getScanUrl(code.id), { width: 512, margin: 2 })
+    const dataUrl = await renderQrDataUrl(getScanUrl(code.id), 512, code.logo_data_url)
     const a = document.createElement('a')
     a.href = dataUrl
     a.download = `${code.name.replace(/\s+/g, '-')}-qr.png`
@@ -113,6 +113,7 @@ export function CodeDetailPage() {
                 size={QR_SIZE}
                 alt={`QR code for ${code.name}`}
                 className="h-auto max-w-full w-full"
+                logoUrl={code.logo_data_url}
               />
             </div>
             <button

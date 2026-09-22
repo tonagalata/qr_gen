@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
+import { renderQrDataUrl } from '../lib/qrLogo'
 
 interface QrCodeImageProps {
   /** Content to encode (URL, text, etc.) */
@@ -8,12 +8,14 @@ interface QrCodeImageProps {
   size?: number
   className?: string
   alt?: string
+  /** Optional logo/SVG image (as a data URL) composited in the center */
+  logoUrl?: string | null
 }
 
 /**
  * Renders a scannable QR code image. If value is empty, shows a placeholder.
  */
-export function QrCodeImage({ value, size = 128, className = '', alt = 'QR code' }: QrCodeImageProps) {
+export function QrCodeImage({ value, size = 128, className = '', alt = 'QR code', logoUrl }: QrCodeImageProps) {
   const [dataUrl, setDataUrl] = useState<string | null>(null)
   const [error, setError] = useState(false)
 
@@ -24,10 +26,10 @@ export function QrCodeImage({ value, size = 128, className = '', alt = 'QR code'
       return
     }
     setError(false)
-    QRCode.toDataURL(value.trim(), { width: size, margin: 1 })
+    renderQrDataUrl(value.trim(), size, logoUrl)
       .then(setDataUrl)
       .catch(() => setError(true))
-  }, [value, size])
+  }, [value, size, logoUrl])
 
   if (error || !dataUrl) {
     return (

@@ -5,6 +5,7 @@ export interface QrCode {
   target_url: string
   status: 'active' | 'paused' | 'archived' | 'static' | 'expired'
   short_slug: string | null
+  logo_data_url: string | null
   total_scans: number
   unique_scans: number
   last_scan_at: string | null
@@ -12,5 +13,5 @@ export interface QrCode {
   updated_at: string
 }
 
-export type QrCodeCreate = Pick<QrCode, 'name'> & Partial<Pick<QrCode, 'subtitle' | 'target_url' | 'status'>>
-export type QrCodeUpdate = Partial<Pick<QrCode, 'name' | 'subtitle' | 'target_url' | 'status'>>
+export type QrCodeCreate = Pick<QrCode, 'name'> & Partial<Pick<QrCode, 'subtitle' | 'target_url' | 'status' | 'logo_data_url'>>
+export type QrCodeUpdate = Partial<Pick<QrCode, 'name' | 'subtitle' | 'target_url' | 'status' | 'logo_data_url'>>
